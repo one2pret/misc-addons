@@ -1,9 +1,11 @@
+# Copyright 2016-2018 Ildar Nasyrov <https://it-projects.info/team/iledarn>
+# Copyright 2016-2018 Ivan Yelizariev <https://it-projects.info/team/yelizariev>
 import base64
 import os
 import hashlib
 import logging
 
-from odoo import api, models, _
+from odoo import api, models, _, fields
 from odoo.tools.safe_eval import safe_eval
 
 _logger = logging.getLogger(__name__)
@@ -15,8 +17,20 @@ except:
     found on your installation')
 
 
+class IrAttachmentResized(models.Model):
+    _name = 'ir.attachment.resized'
+    _description = 'Url to resized image'
+
+    attachment_id = fields.Many2one('ir.attachment')
+    width = fields.Integer()
+    height = fields.Integer()
+    resized_attachment_id = fields.Many2one('ir.attachment', ondelete='cascade')
+
+
 class IrAttachment(models.Model):
     _inherit = 'ir.attachment'
+
+    resized_ids = fields.One2many('ir.attachment.resized', 'attachment_id')
 
     def _get_s3_settings(self, param_name, os_var_name):
         config_obj = self.env['ir.config_parameter']
@@ -60,21 +74,27 @@ class IrAttachment(models.Model):
         return s3
 
     def _inverse_datas(self):
-        s3 = self._get_s3_resource()
         condition = self._get_s3_settings('s3.condition', 'S3_CONDITION')
-        if not s3:
-            # set s3_records to empty recordset
-            s3_records = self.env[self._name]
-        elif condition:
+        if condition and not self.env.context.get('force_s3'):
             condition = safe_eval(condition, mode="eval")
-            s3_records = self.search([('id', 'in', self.ids)] + condition)
+            s3_records = self.sudo().search([('id', 'in', self.ids)] + condition)
         else:
-            # if there is no condition then store all attachments on s3
+            # if there is no condition or force_s3 in context
+            # then store all attachments on s3
             s3_records = self
-        s3_records = s3_records._filter_protected_attachments()
-        s3_records = s3_records.filtered('datas')
 
-        for attach in s3_records:
+        if s3_records:
+            s3 = self._get_s3_resource()
+            if not s3:
+                _logger.info('something wrong on aws side, keep attachments as usual')
+                s3_records = self.env[self._name]
+            else:
+                s3_records = s3_records._filter_protected_attachments()
+                s3_records = s3_records.filtered(lambda r: r.type != 'url')
+
+        resized_to_remove = self.env['ir.attachment.resized'].sudo()
+        for attach in self & s3_records:  # datas field has got empty somehow in the result of ``s3_records = self.sudo().search([('id', 'in', self.ids)] + condition)`` search for non-superusers but it is in original recordset. Here we use original (with datas) in case it intersects with the search result
+            resized_to_remove |= attach.sudo().resized_ids
             value = attach.datas
             bin_data = base64.b64decode(value) if value else b''
             fname = hashlib.sha1(bin_data).hexdigest()
@@ -98,4 +118,6 @@ class IrAttachment(models.Model):
             }
             super(IrAttachment, attach.sudo()).write(vals)
 
+        resized_to_remove.mapped('resized_attachment_id').unlink()
+        resized_to_remove.unlink()
         super(IrAttachment, self - s3_records)._inverse_datas()

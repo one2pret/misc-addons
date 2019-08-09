@@ -1,3 +1,29 @@
+`1.1.8`
+-------
+
+- **Fix**  When a link to a picture that does not have an extension is written in a binary field, its mimetype is not determined, which leads to an "binascii.Error: decoding with base64 codec failed (Error: Incorrect padding)"
+- **Improvement:**  The `index_content` field is filled for attachments when a link to a file is written in a binary field.
+
+`1.1.7`
+-------
+
+- **Fix:** Product Variant were downloaded on server instead of passing url
+
+`1.1.6`
+-------
+
+- **Fix**  When the "image_resize_image" function was called, they received the error "binascii.Error: decoding with base64 codec failed (Error: Incorrect padding)", since the value of the binary field is the URL, not the base_64 string.
+
+`1.1.5`
+-------
+
+- **Fix** Update of an inherited function binary_content according to original one. Update is necessary to support the work with access_token argument.
+
+`1.1.4`
+-------
+
+- **Improvement:** exclude `ir.ui.menu` attachments from eligible to be stored outside (e.g. `ir_attachment_s3`). There is only one small web icon image in this model - no point to store it outside
+
 `1.1.3`
 -------
 

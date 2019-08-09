@@ -1,3 +1,18 @@
+`1.2.0`
+-------
+
+- **Improvement:** Save resized image to s3 instead of passing original (big) image
+
+`1.1.2`
+-------
+
+- **FIX:** there is no need to create Bucker object if there is no attachments are found to be stored on s3
+
+`1.1.1`
+-------
+
+- **FIX:** non-supersusers cannot save attachments in s3
+
 `1.1.0`
 -------
 
